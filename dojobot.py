@@ -3,19 +3,30 @@ import os
 import dbm
 from itertools import cycle
 import asyncio
+from pathlib import Path
+import json
 
 import discord
 import github
 
 
-NUM_TEAMS = 5
-TEAMS = range(1, NUM_TEAMS + 1)
+def set_num_teams(n):
+    global NUM_TEAMS, TEAMS, next_team
+    
+    NUM_TEAMS = 5
+    TEAMS = range(1, NUM_TEAMS + 1)
+    next_team = cycle(TEAMS)
+    
+    
+set_num_teams(5)
 
 GITHUB_TOKEN = os.environ['GITHUB_TOKEN']
 DISCORD_SECRET = os.environ['DISCORD_SECRET']
+ADMIN_ROLE = 704428302420541441
 
-next_team = cycle(TEAMS)
+config_file = Path(__file__).with_name('config.json')
 
+config = json.loads(config_file.read_text())
 db = dbm.open('teams.db', 'c')
 
 teams = {num: [] for num in TEAMS}
@@ -77,6 +88,7 @@ async def grant_role(guild, member, role_name) -> bool:
 
 @command
 async def register(*args, message):
+    """Register for the dojo using your GitHub username."""
     if len(args) != 2 or args[0] != 'github':
         await reply("You should type `!register github <account>`")
 
@@ -85,7 +97,9 @@ async def register(*args, message):
     guild = message.guild
     account = args[1]
     team = assign_team(str(author))
-    repo = 'lordmauve/tetrish'
+    
+    prefix = config['repo_prefix']
+    repo = f'{prefix}{team}'
 
     loop = asyncio.get_running_loop()
 
@@ -107,8 +121,52 @@ async def register(*args, message):
         if granted:
             msgs.append(f"You now have access to the team {team} channels.")
         await channel.send('\n\n'.join(msgs))
+        
+
+@command
+async def roles(*args, message):
+    """Print the roles you are a member of."""
+    author = message.author
+    roles = author.roles
+    await message.channel.send(
+        f"<@{author.id}> Your roles: " + ' '.join(f"{role.name}'" for role in roles)
+    )
+    
+    
+def is_herder(member):
+    """Return True if the user is a cat herder."""
+    return any(r.id == ADMIN_ROLE for r in member.roles)
 
 
+@command
+async def teams(*args, message):
+    """Set the number of teams."""
+    author = message.author
+    if not is_herder(author):
+        await message.channel.send(f"<@{author.id}> You are not a cat herder.")
+        return
+    
+    try:
+        num, = map(int, args)
+    except Exception:
+        await message.channel.send("Usage: !teams <num>")
+        
+    set_num_teams(num)
+    for k in list(db.keys()):
+        del db[k]
+    await message.channel.send(f"Set to {num} teams.")
+        
+        
+@command
+async def help(*args, message):
+    """Show this help."""
+    help_text = '\n'.join(
+        f'{k:<10} {v.__doc__}'
+        for k, v in HANDLERS.items()
+    )
+    await message.channel.send(help_text)
+        
+        
 @client.event
 async def on_message(message):
     if message.author == client.user:
