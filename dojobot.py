@@ -13,12 +13,12 @@ import github
 def set_num_teams(n):
     global NUM_TEAMS, TEAMS, next_team
     
-    NUM_TEAMS = 5
+    NUM_TEAMS = n
     TEAMS = range(1, NUM_TEAMS + 1)
     next_team = cycle(TEAMS)
     
     
-set_num_teams(5)
+set_num_teams(3)
 
 GITHUB_TOKEN = os.environ['GITHUB_TOKEN']
 DISCORD_SECRET = os.environ['DISCORD_SECRET']
@@ -99,7 +99,7 @@ async def register(*args, message):
     team = assign_team(str(author))
     
     prefix = config['repo_prefix']
-    repo = f'{prefix}{team}'
+    repo = f'{prefix}-team{team}'
 
     loop = asyncio.get_running_loop()
 
